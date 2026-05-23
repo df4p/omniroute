@@ -193,6 +193,17 @@ export const WEB_COOKIE_PROVIDERS = {
     website: "https://chat.deepseek.com",
     authHint: "Paste your ds_session_id cookie from chat.deepseek.com",
   },
+  "adapta-web": {
+    id: "adapta-web",
+    alias: "adp-web",
+    name: "Adapta Web (Gold/Business)",
+    icon: "auto_awesome",
+    color: "#6E3AD3",
+    textIcon: "AW",
+    website: "https://agent.adapta.one",
+    authHint:
+      "Paste your __client cookie value from .clerk.agent.adapta.one (DevTools → Application → Cookies)",
+  },
 };
 
 // API Key Providers

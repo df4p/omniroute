@@ -27,6 +27,7 @@ import { WindsurfExecutor } from "./windsurf.ts";
 import { DevinCliExecutor } from "./devin-cli.ts";
 import { DeepSeekWebExecutor } from "./deepseek-web.ts";
 import { DeepSeekWebWithAutoRefreshExecutor } from "./deepseek-web-with-auto-refresh.ts";
+import { AdaptaWebExecutor } from "./adapta-web.ts";
 
 const executors = {
   antigravity: new AntigravityExecutor(),
@@ -75,6 +76,8 @@ const executors = {
   devin: new DevinCliExecutor(), // Alias
   "deepseek-web": new DeepSeekWebWithAutoRefreshExecutor(),
   "ds-web": new DeepSeekWebWithAutoRefreshExecutor(), // Alias
+  "adapta-web": new AdaptaWebExecutor(),
+  "adp-web": new AdaptaWebExecutor(), // Alias
 };
 
 const defaultCache = new Map();
@@ -120,3 +123,4 @@ export { WindsurfExecutor } from "./windsurf.ts";
 export { DevinCliExecutor } from "./devin-cli.ts";
 export { DeepSeekWebExecutor } from "./deepseek-web.ts";
 export { DeepSeekWebWithAutoRefreshExecutor } from "./deepseek-web-with-auto-refresh.ts";
+export { AdaptaWebExecutor } from "./adapta-web.ts";
