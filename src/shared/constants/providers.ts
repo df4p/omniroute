@@ -375,6 +375,17 @@ export const WEB_COOKIE_PROVIDERS = {
       "Copy the value of 'convex-session-id'. Also open DevTools → Network, copy the Cookie header from any request. " +
       "Paste both values here. See provider setup docs for a step-by-step guide.",
   },
+  "inner-ai": {
+    id: "inner-ai",
+    alias: "in-ai",
+    name: "Inner.ai (Subscription)",
+    icon: "auto_awesome",
+    color: "#1A56DB",
+    textIcon: "IA",
+    website: "https://app.innerai.com",
+    authHint:
+      "Paste your token cookie value from .innerai.com — open DevTools → Application → Cookies → .innerai.com and copy the token value.",
+  },
   "adapta-web": {
     id: "adapta-web",
     alias: "adp-web",
@@ -2718,6 +2729,7 @@ const BULK_API_KEY_EXCLUDED = new Set([
   "blackbox-web",
   "muse-spark-web",
   "deepseek-web",
+  "inner-ai",
   "qoder",
   "google-pse-search",
   "command-code",

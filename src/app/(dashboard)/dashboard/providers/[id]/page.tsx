@@ -1169,6 +1169,7 @@ export default function ProviderDetailPage() {
     Record<string, { proxy: any; level: string } | null>
   >({});
   const [importingModels, setImportingModels] = useState(false);
+  const [showTutorialModal, setShowTutorialModal] = useState(false);
   const [importingZed, setImportingZed] = useState(false);
   const [showZedManual, setShowZedManual] = useState(false);
   const [zedManualProvider, setZedManualProvider] = useState("openai");
@@ -3497,7 +3498,7 @@ export default function ProviderDetailPage() {
                 {t("connectionCountLabel", { count: connections.length })}
               </p>
               <EmailPrivacyToggle size="md" />
-              {providerId === "adapta-web" && (
+              {(providerId === "inner-ai" || providerId === "adapta-web") && (
                 <button
                   onClick={() => setShowTutorialModal(true)}
                   className="text-sm font-medium underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity"
@@ -4692,6 +4693,67 @@ export default function ProviderDetailPage() {
           )}
         </div>
       </Modal>
+
+      {/* Inner.ai Tutorial Modal */}
+      {providerId === "inner-ai" && showTutorialModal && (
+        <Modal onClose={() => setShowTutorialModal(false)} title="Como conectar o Inner.ai">
+          <div className="flex flex-col gap-4 text-sm">
+            <p className="text-text-muted">
+              O Inner.ai usa um token de sessão de longa duração armazenado como cookie. Siga os
+              passos abaixo para encontrá-lo.
+            </p>
+            <ol className="flex flex-col gap-3 list-none">
+              {[
+                {
+                  step: 1,
+                  title: "Acesse o Inner.ai e faça login",
+                  desc: "Abra o Chrome e vá para app.innerai.com. Faça login com sua conta.",
+                },
+                {
+                  step: 2,
+                  title: "Abra o DevTools",
+                  desc: 'Pressione F12 (Windows/Linux) ou Cmd+Option+I (Mac) para abrir as ferramentas de desenvolvedor.',
+                },
+                {
+                  step: 3,
+                  title: 'Navegue até Application → Cookies → .innerai.com',
+                  desc: 'No painel do DevTools, clique na aba "Application". No painel esquerdo, expanda "Cookies" e clique em ".innerai.com".',
+                },
+                {
+                  step: 4,
+                  title: 'Encontre o cookie chamado "token"',
+                  desc: 'Procure na lista o cookie de nome "token". O valor é um JWT longo que começa com "eyJ…".',
+                },
+                {
+                  step: 5,
+                  title: "Copie e cole o valor aqui",
+                  desc: 'Clique duas vezes no campo "Value" do cookie "token", copie o valor completo e cole no campo de autenticação do OmniRoute.',
+                },
+              ].map(({ step, title, desc }) => (
+                <li key={step} className="flex gap-3">
+                  <span
+                    className="flex-none w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                    style={{ background: "#1A56DB" }}
+                  >
+                    {step}
+                  </span>
+                  <div>
+                    <p className="font-medium">{title}</p>
+                    <p className="text-text-muted text-xs mt-0.5">{desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <div
+              className="rounded-lg px-4 py-3 text-xs"
+              style={{ background: "rgba(26,86,219,0.08)", border: "1px solid rgba(26,86,219,0.2)" }}
+            >
+              <strong style={{ color: "#1A56DB" }}>Dica:</strong> O token do Inner.ai tem validade
+              de aproximadamente 360 dias. Se a conexão expirar, repita o processo acima.
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Adapta Web — Tutorial Modal */}
       {providerId === "adapta-web" && (

@@ -3309,6 +3309,78 @@ async function validateJulesProvider({ apiKey }: { apiKey: string }) {
   }
 }
 
+async function validateInnerAiProvider({ apiKey, providerSpecificData = {} }: any) {
+  try {
+    const raw = typeof apiKey === "string" ? apiKey.trim() : "";
+    if (!raw) {
+      return {
+        valid: false,
+        error:
+          "Paste your token cookie value from DevTools → Application → Cookies → .innerai.com",
+      };
+    }
+    const eqIdx = raw.indexOf("=");
+    const token = eqIdx > 0 && !raw.startsWith("eyJ") ? raw.slice(eqIdx + 1).trim() : raw;
+
+    // Decode device_id from JWT payload (no signature verification needed)
+    const parts = token.split(".");
+    if (parts.length < 2) {
+      return { valid: false, error: "Invalid token format — paste the token cookie value from .innerai.com" };
+    }
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+    } catch {
+      return { valid: false, error: "Could not parse Inner.ai token — re-paste from DevTools" };
+    }
+    const deviceId = String(payload.device_id ?? "").trim();
+    if (!deviceId) {
+      return { valid: false, error: "Token does not contain device_id — re-paste from DevTools" };
+    }
+
+    const response = await validationRead(
+      "https://platformapi.innerai.com/api/v1/users/profile",
+      {
+        headers: applyCustomUserAgent(
+          {
+            "USER-TOKEN": token,
+            "DEVICE-ID": deviceId,
+            "User-Agent":
+              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            Origin: "https://app.innerai.com",
+          },
+          providerSpecificData
+        ),
+      }
+    );
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        valid: false,
+        error: "Invalid or expired Inner.ai token — re-paste from DevTools → Cookies → .innerai.com",
+      };
+    }
+
+    if (!response.ok) {
+      return { valid: false, error: `Inner.ai returned HTTP ${response.status}` };
+    }
+
+    const body = await response.json().catch(() => null);
+    const email = String(body?.data?.email ?? body?.email ?? "").trim();
+    if (!email) {
+      return {
+        valid: false,
+        error: "Could not retrieve email from Inner.ai profile — check your token",
+      };
+    }
+
+    return { valid: true, error: null };
+  } catch (error: any) {
+    return toValidationErrorResult(error);
+  }
+}
+
 export async function validateProviderApiKey({ provider, apiKey, providerSpecificData = {} }: any) {
   const requiresApiKey = !providerAllowsOptionalApiKey(provider);
   const isLocal = isLocalProvider(provider);
@@ -3409,6 +3481,7 @@ export async function validateProviderApiKey({ provider, apiKey, providerSpecifi
     "perplexity-web": validatePerplexityWebProvider,
     "blackbox-web": validateBlackboxWebProvider,
     "muse-spark-web": validateMuseSparkWebProvider,
+    "inner-ai": validateInnerAiProvider,
     "adapta-web": validateAdaptaWebProvider,
     "azure-openai": validateAzureOpenAIProvider,
     "azure-ai": validateAzureAiProvider,
