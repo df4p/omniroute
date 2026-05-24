@@ -131,6 +131,8 @@ export function translateRequest(
     normalizeToolCallId?: boolean;
     preserveDeveloperRole?: boolean;
     preserveCacheControl?: boolean;
+    signatureNamespace?: string | null;
+    preCompressionBody?: Record<string, unknown> | null;
   }
 ) {
   let result = body;
@@ -184,7 +186,17 @@ export function translateRequest(
       if (targetFormat !== FORMATS.OPENAI) {
         const fromOpenAI = getRequestTranslator(FORMATS.OPENAI, targetFormat);
         if (fromOpenAI) {
-          result = fromOpenAI(model, result, stream, credentials);
+          const hasNs = options?.signatureNamespace != null;
+          const hasPreCompression = options?.preCompressionBody != null;
+          const translationCredentials =
+            hasNs || hasPreCompression
+              ? {
+                  ...(credentials && typeof credentials === "object" ? credentials : {}),
+                  ...(hasNs ? { _signatureNamespace: options.signatureNamespace } : {}),
+                  ...(hasPreCompression ? { _preCompressionBody: options.preCompressionBody } : {}),
+                }
+              : credentials;
+          result = fromOpenAI(model, result, stream, translationCredentials);
         }
       }
     }

@@ -17,8 +17,22 @@ export interface ProviderEntry<TProvider = Record<string, unknown>> {
   providerId: string;
   provider: TProvider;
   stats: ProviderStatsSnapshot;
-  displayAuthType: "oauth" | "apikey" | "compatible";
-  toggleAuthType: "oauth" | "free" | "apikey";
+  displayAuthType: "oauth" | "apikey" | "compatible" | "no-auth";
+  toggleAuthType: "oauth" | "free" | "apikey" | "no-auth";
+}
+
+export function shouldApplyConfiguredOnlyFilter(
+  showConfiguredOnly: boolean,
+  connectionCount: number
+): boolean {
+  return showConfiguredOnly && connectionCount > 0;
+}
+
+export function shouldShowFirstProviderHint(
+  connectionCount: number,
+  searchQuery?: string
+): boolean {
+  return connectionCount === 0 && !searchQuery?.trim();
 }
 
 type ProviderRecord<TProvider = Record<string, unknown>> = Record<string, TProvider>;

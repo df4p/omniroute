@@ -10,7 +10,7 @@ import { useTranslations } from "next-intl";
 import {
   OAUTH_PROVIDERS,
   APIKEY_PROVIDERS,
-  FREE_PROVIDERS,
+  NOAUTH_PROVIDERS,
   CLAUDE_CODE_COMPATIBLE_PREFIX,
   OPENAI_COMPATIBLE_PREFIX,
   ANTHROPIC_COMPATIBLE_PREFIX,
@@ -36,7 +36,8 @@ const HEADER_DESCRIPTIONS: Partial<Record<HideableSidebarItemId, string>> = {
   costs: "costsDescription",
   analytics: "analyticsDescription",
   cache: "cacheDescription",
-  limits: "limitsDescription",
+  quota: "limitsDescription",
+  runtime: "runtimeDescription",
   media: "mediaDescription",
   agents: "agentsDescription",
   "cloud-agents": "cloudAgentsDescription",
@@ -90,10 +91,6 @@ const HEADER_DESCRIPTIONS: Partial<Record<HideableSidebarItemId, string>> = {
   "1proxy": "oneProxyDescription",
   // OmniProxy items
   "cli-tools": "cliToolsDescription",
-  agents: "agentsDescription",
-  "cloud-agents": "cloudAgentsDescription",
-  "api-endpoints": "apiEndpointsDescription",
-  webhooks: "webhooksDescription",
 };
 
 // Build href → sidebar item lookup (non-external items only)
@@ -141,7 +138,7 @@ function usePageInfo(pathname: string | null): PageInfo {
   const providerMatch = pathname.match(/\/providers\/([^/]+)$/);
   if (providerMatch) {
     const pid = providerMatch[1];
-    const info = OAUTH_PROVIDERS[pid] || FREE_PROVIDERS[pid] || APIKEY_PROVIDERS[pid];
+    const info = OAUTH_PROVIDERS[pid] || NOAUTH_PROVIDERS[pid] || APIKEY_PROVIDERS[pid];
     if (info) return { title: info.name, description: "", providerId: info.id };
     if (pid.startsWith(CLAUDE_CODE_COMPATIBLE_PREFIX))
       return { title: "CC Compatible", description: "", providerId: "claude" };

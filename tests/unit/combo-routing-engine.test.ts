@@ -34,6 +34,7 @@ function createLog() {
     info: (tag: any, msg: any) => entries.push({ level: "info", tag, msg }),
     warn: (tag: any, msg: any) => entries.push({ level: "warn", tag, msg }),
     error: (tag: any, msg: any) => entries.push({ level: "error", tag, msg }),
+    debug: (tag: any, msg: any) => entries.push({ level: "debug", tag, msg }),
     entries,
   };
 }
@@ -1598,7 +1599,8 @@ test("handleComboChat standalone lkgp strategy updates LKGP after a successful c
   );
 
   assert.equal(result.ok, true);
-  assert.equal(persistedProvider, "openai");
+  // getLKGP now returns LKGPRecord | null — source: src/lib/db/settings.ts getLKGP()
+  assert.equal(persistedProvider?.provider, "openai");
 });
 
 test("handleComboChat auto strategy falls back to the full pool when tool filtering empties candidates", async () => {
@@ -1762,7 +1764,7 @@ test("handleComboChat context cache protection pins the model and tags tool-call
   );
 });
 
-test("handleComboChat context cache protection sanitizes streamed text tags from client output", async () => {
+test("handleComboChat context cache protection preserves omniModel tag in streamed output for round-trip pinning", async () => {
   const result = await handleComboChat({
     body: { stream: true, messages: [{ role: "user", content: "stream it" }] },
     combo: {
@@ -1788,7 +1790,7 @@ test("handleComboChat context cache protection sanitizes streamed text tags from
   assert.equal(result.ok, true);
   assert.equal(result.headers.get("X-OmniRoute-Model"), "openai/gpt-4o-mini");
   assert.match(text, /hello world/);
-  assert.doesNotMatch(text, /<omniModel>/);
+  assert.match(text, /<omniModel>openai\/gpt-4o-mini<\/omniModel>/);
 });
 
 test("handleComboChat context cache protection injects a hidden tag for tool-call-only streams", async () => {
@@ -1816,7 +1818,7 @@ test("handleComboChat context cache protection injects a hidden tag for tool-cal
   const text = await result.text();
   assert.equal(result.ok, true);
   assert.match(text, /"finish_reason":"tool_calls"/);
-  assert.doesNotMatch(text, /<omniModel>/);
+  assert.match(text, /<omniModel>openai\/gpt-4o-mini<\/omniModel>/);
 });
 
 test("handleComboChat context cache protection flushes cleanly when a stream ends without content", async () => {
@@ -1840,8 +1842,7 @@ test("handleComboChat context cache protection flushes cleanly when a stream end
   assert.equal(result.ok, true);
   assert.equal(result.headers.get("X-OmniRoute-Model"), "openai/gpt-4o-mini");
   assert.match(text, /data: \[DONE\]/);
-  assert.match(text, /"content":""/);
-  assert.doesNotMatch(text, /<omniModel>/);
+  assert.match(text, /"content":"<omniModel>openai\/gpt-4o-mini<\/omniModel>"/);
 });
 
 test("handleComboChat round-robin resolves nested combos and returns inactive when every target is skipped", async () => {
@@ -2060,17 +2061,19 @@ test("handleComboChat falls back to next model when first model returns all-acco
 test("handleComboChat round-robin falls back when all-accounts-rate-limited 503 is returned", async () => {
   const calls: any[] = [];
 
+  // Use distinct provider prefixes so #1731 exhaustedProviders does not block model-b
+  // (getTargetProvider("openai/model-a") → "openai"; getTargetProvider("anthropic/model-b") → "anthropic")
   const result = await handleComboChat({
     body: {},
     combo: {
       name: "rr-all-accounts-rate-limited",
       strategy: "round-robin",
-      models: ["model-a", "model-b"],
+      models: ["openai/model-a", "anthropic/model-b"],
       config: { maxRetries: 0, retryDelayMs: 1, concurrencyPerModel: 1, queueTimeoutMs: 5 },
     },
     handleSingleModel: async (_body: any, modelStr: any) => {
       calls.push(modelStr);
-      if (modelStr === "model-b") {
+      if (modelStr === "anthropic/model-b") {
         return okResponse({ choices: [{ message: { content: "ok" } }] });
       }
       // Simulate all accounts rate-limited — handleNoCredentials signal
@@ -2091,7 +2094,7 @@ test("handleComboChat round-robin falls back when all-accounts-rate-limited 503 
 
   const payload = (await result.json()) as any;
   assert.equal(result.ok, true);
-  assert.deepEqual(calls, ["model-a", "model-b"]);
+  assert.deepEqual(calls, ["openai/model-a", "anthropic/model-b"]);
   assert.equal(payload.choices[0].message.content, "ok");
 });
 
