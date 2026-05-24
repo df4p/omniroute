@@ -13,9 +13,14 @@ const MODELS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface InnerAiModel {
-  id: number;
+  id: string; // UUID from platformapi
   llm_model: string;
   name?: string;
+  enable?: boolean;
+  visible?: boolean;
+  unavailable_api?: boolean;
+  pro_only?: boolean;
+  ultra_only?: boolean;
 }
 
 interface CredentialCache {
@@ -48,14 +53,29 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
-function extractToken(rawApiKey: string): string {
+/** Parse the credential string.
+ *
+ * Accepted formats:
+ *   "eyJhbG..." — token only (no email, chat will try without USER-EMAIL)
+ *   "eyJhbG... user@example.com" — token + email (recommended)
+ *   "token=eyJhbG... user@example.com" — same with token= prefix
+ */
+function parseCredential(rawApiKey: string): { token: string; credEmail: string } {
   const trimmed = rawApiKey.trim();
-  // Strip "token=<value>" form if present
+  // Strip "token=<value>" prefix if present
   const eqIdx = trimmed.indexOf("=");
-  if (eqIdx > 0 && !trimmed.startsWith("eyJ")) {
-    return trimmed.slice(eqIdx + 1).trim();
+  const stripped =
+    eqIdx > 0 && !trimmed.startsWith("eyJ") ? trimmed.slice(eqIdx + 1).trim() : trimmed;
+
+  // Split by the LAST space; if the last part looks like an email it's the credential email
+  const lastSpace = stripped.lastIndexOf(" ");
+  if (lastSpace > 0) {
+    const possibleEmail = stripped.slice(lastSpace + 1).trim();
+    if (possibleEmail.includes("@")) {
+      return { token: stripped.slice(0, lastSpace).trim(), credEmail: possibleEmail };
+    }
   }
-  return trimmed;
+  return { token: stripped, credEmail: "" };
 }
 
 function makeErrorResult(status: number, message: string, body: unknown) {
@@ -77,72 +97,78 @@ function makeErrorResult(status: number, message: string, body: unknown) {
 }
 
 /** Build request headers for Inner.ai API calls. */
-function buildHeaders(
-  token: string,
-  email: string,
-  deviceId: string
-): Record<string, string> {
-  return {
+function buildHeaders(token: string, email: string, deviceId: string): Record<string, string> {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "User-Agent": INNER_AI_USER_AGENT,
+    // Cookie-based auth — the token cookie is scoped to .innerai.com so all
+    // *.innerai.com subdomains expect it via Cookie header.
+    Cookie: `token=${token}`,
     "USER-TOKEN": token,
-    "USER-EMAIL": email,
     "DEVICE-ID": deviceId,
     Origin: "https://app.innerai.com",
     Referer: "https://app.innerai.com/",
   };
+  if (email) headers["USER-EMAIL"] = email;
+  return headers;
 }
 
 // ── Credential resolution (email + deviceId from JWT + profile API) ───────────
 
 async function resolveCredentials(
   token: string,
+  credEmail: string,
   signal?: AbortSignal | null
 ): Promise<CredentialCache> {
   const key = tokenCacheKey(token);
   const cached = credentialCache.get(key);
   if (cached) return cached;
 
-  // Decode device_id from JWT payload
+  // Decode device_id from JWT payload (accept multiple field names)
   const payload = decodeJwtPayload(token);
-  const deviceId = String(payload?.device_id ?? "").trim();
-  if (!deviceId) {
-    throw new Error(
-      "Could not decode device_id from Inner.ai token — re-paste your token cookie from .innerai.com"
-    );
-  }
-
-  // Fetch email from profile API
-  const profileResp = await fetch(INNER_AI_PROFILE_URL, {
-    headers: {
-      "USER-TOKEN": token,
-      "DEVICE-ID": deviceId,
-      "User-Agent": INNER_AI_USER_AGENT,
-      Origin: "https://app.innerai.com",
-    },
-    signal: signal ?? undefined,
-  });
-
-  if (profileResp.status === 401 || profileResp.status === 403) {
-    throw new Error(
-      "Inner.ai token is invalid or expired — re-paste from DevTools → Cookies → .innerai.com"
-    );
-  }
-  if (!profileResp.ok) {
-    throw new Error(`Inner.ai profile API returned HTTP ${profileResp.status}`);
-  }
-
-  const body = await profileResp.json().catch(() => null);
-  const email = String(
-    (body as Record<string, unknown>)?.data
-      ? ((body as Record<string, unknown>).data as Record<string, unknown>)?.email
-      : (body as Record<string, unknown>)?.email ?? ""
+  const deviceId = String(
+    payload?.device_id ?? payload?.deviceId ?? payload?.["device-id"] ?? payload?.did ?? ""
   ).trim();
 
-  if (!email) {
-    throw new Error(
-      "Could not retrieve email from Inner.ai profile — check your token cookie"
-    );
+  // Build profile request headers — include cookie auth + custom headers
+  const profileHeaders: Record<string, string> = {
+    Cookie: `token=${token}`,
+    "USER-TOKEN": token,
+    "User-Agent": INNER_AI_USER_AGENT,
+    Origin: "https://app.innerai.com",
+    Referer: "https://app.innerai.com/",
+  };
+  if (deviceId) profileHeaders["DEVICE-ID"] = deviceId;
+
+  // Attempt to fetch email from profile API — non-fatal if it fails
+  let email = "";
+  try {
+    const profileResp = await fetch(INNER_AI_PROFILE_URL, {
+      headers: profileHeaders,
+      signal: signal ?? undefined,
+    });
+
+    if (profileResp.ok) {
+      const body = await profileResp.json().catch(() => null);
+      const b = body as Record<string, unknown> | null;
+      email = String(
+        (b?.data as Record<string, unknown>)?.email ??
+          (b?.user as Record<string, unknown>)?.email ??
+          (b?.profile as Record<string, unknown>)?.email ??
+          b?.email ??
+          ""
+      ).trim();
+    }
+  } catch {
+    // Profile fetch failed — proceed without email
+  }
+
+  // Fallback 1: use the email provided directly in the credential string
+  if (!email && credEmail) email = credEmail;
+
+  // Fallback 2: extract email from JWT sub if it looks like one
+  if (!email && typeof payload?.sub === "string" && payload.sub.includes("@")) {
+    email = payload.sub;
   }
 
   const creds: CredentialCache = { email, deviceId };
@@ -170,14 +196,29 @@ async function resolveModels(
   if (!resp.ok) return [];
 
   const body = await resp.json().catch(() => null);
-  let models: InnerAiModel[] = [];
+  let raw: InnerAiModel[] = [];
   if (Array.isArray(body)) {
-    models = body as InnerAiModel[];
+    raw = body as InnerAiModel[];
   } else if (Array.isArray((body as Record<string, unknown>)?.data)) {
-    models = (body as Record<string, unknown>).data as InnerAiModel[];
+    raw = (body as Record<string, unknown>).data as InnerAiModel[];
   } else if (Array.isArray((body as Record<string, unknown>)?.ai_models)) {
-    models = (body as Record<string, unknown>).ai_models as InnerAiModel[];
+    raw = (body as Record<string, unknown>).ai_models as InnerAiModel[];
   }
+
+  // Keep only text/chat models that are enabled and available for this account.
+  // Prefer the ai_model_categories field; fall back to llm_model heuristic.
+  const nonTextPattern =
+    /image|video|audio|img|vid|sound|music|voice|tts|stt|track|clip|avatar|cartoon|flux|stable.diff|recraft|ideogram|leonardo|magnific|bria|seedream|luma|kling|pika|veo|wan-|heygen|did-|vidu|pixverse|sora-|gen-[0-9]|playground|gemini-fal|gamma|lyria|clothes|whisper/i;
+  const models = raw.filter((m) => {
+    if (m.enable === false || m.unavailable_api) return false;
+    const cats = Array.isArray((m as Record<string, unknown>).ai_model_categories)
+      ? ((m as Record<string, unknown>).ai_model_categories as Array<Record<string, unknown>>)
+      : null;
+    if (cats && cats.length > 0) {
+      return cats.some((c) => String(c.unique_identifier ?? c.name ?? "").toLowerCase() === "text");
+    }
+    return !nonTextPattern.test(m.llm_model);
+  });
 
   modelsCache.set(key, { models, expiresAt: Date.now() + MODELS_CACHE_TTL_MS });
   return models;
@@ -295,17 +336,13 @@ function transformInnerAiSSE(upstream: ReadableStream, model: string): ReadableS
               if (!item) continue;
               if (!emittedRole) {
                 emittedRole = true;
-                controller.enqueue(
-                  encoder.encode(chunkEvent({ role: "assistant", content: "" }))
-                );
+                controller.enqueue(encoder.encode(chunkEvent({ role: "assistant", content: "" })));
               }
               controller.enqueue(encoder.encode(chunkEvent({ content: item })));
             } else if (type === "end_stream") {
               if (!emittedRole) {
                 emittedRole = true;
-                controller.enqueue(
-                  encoder.encode(chunkEvent({ role: "assistant", content: "" }))
-                );
+                controller.enqueue(encoder.encode(chunkEvent({ role: "assistant", content: "" })));
               }
               controller.enqueue(encoder.encode(chunkEvent({}, "stop")));
               controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -350,9 +387,7 @@ function transformInnerAiSSE(upstream: ReadableStream, model: string): ReadableS
 
       // Stream ended without explicit end_stream
       if (!emittedRole) {
-        controller.enqueue(
-          encoder.encode(chunkEvent({ role: "assistant", content: "" }))
-        );
+        controller.enqueue(encoder.encode(chunkEvent({ role: "assistant", content: "" })));
       }
       controller.enqueue(encoder.encode(chunkEvent({}, "stop")));
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -401,7 +436,7 @@ async function collectContent(upstream: ReadableStream): Promise<string> {
 export class InnerAiExecutor extends BaseExecutor {
   async execute(input: ExecuteInput) {
     const { body, credentials, signal, stream: wantStream } = input;
-    const bodyObj = ((body || {}) as Record<string, unknown>);
+    const bodyObj = (body || {}) as Record<string, unknown>;
 
     const rawToken = String(credentials?.apiKey ?? "").trim();
     if (!rawToken) {
@@ -411,12 +446,12 @@ export class InnerAiExecutor extends BaseExecutor {
         body
       );
     }
-    const token = extractToken(rawToken);
+    const { token, credEmail } = parseCredential(rawToken);
 
     // Resolve email + deviceId (decoded from JWT + profile API)
     let creds: CredentialCache;
     try {
-      creds = await resolveCredentials(token, signal);
+      creds = await resolveCredentials(token, credEmail, signal);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to authenticate with Inner.ai";
       credentialCache.delete(tokenCacheKey(token));
@@ -433,10 +468,10 @@ export class InnerAiExecutor extends BaseExecutor {
       // Non-fatal: proceed with empty list; synthetic model entry will be used
     }
 
-    // Use matched model entry, or fall back to a synthetic entry with id=0.
-    // Inner.ai may still resolve the model by llm_model name even when id=0.
-    const modelEntry: InnerAiModel =
-      findModel(models, requestedModel) ?? { id: 0, llm_model: requestedModel };
+    const modelEntry: InnerAiModel = findModel(models, requestedModel) ?? {
+      id: "",
+      llm_model: requestedModel,
+    };
 
     // Build message content from OpenAI messages array
     const rawMessages = Array.isArray(bodyObj.messages) ? bodyObj.messages : [];
@@ -451,7 +486,7 @@ export class InnerAiExecutor extends BaseExecutor {
       session_id: crypto.randomUUID(),
       context_type: "no_context",
       ai_model: {
-        id: modelEntry?.id ?? 0,
+        id: modelEntry?.id || undefined,
         llm_model: modelEntry?.llm_model ?? requestedModel,
       },
       is_extension: false,
@@ -474,7 +509,11 @@ export class InnerAiExecutor extends BaseExecutor {
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Request failed";
-      return makeErrorResult(502, `Inner.ai request failed: ${sanitizeErrorMessage(message)}`, body);
+      return makeErrorResult(
+        502,
+        `Inner.ai request failed: ${sanitizeErrorMessage(message)}`,
+        body
+      );
     }
 
     if (upstream.status === 401 || upstream.status === 403) {

@@ -3315,18 +3315,43 @@ async function validateInnerAiProvider({ apiKey, providerSpecificData = {} }: an
     if (!raw) {
       return {
         valid: false,
-        error:
-          "Paste your token cookie value from DevTools → Application → Cookies → .innerai.com",
+        error: "Paste your token cookie and email — format: eyJ... user@example.com",
       };
     }
-    const eqIdx = raw.indexOf("=");
-    const token = eqIdx > 0 && !raw.startsWith("eyJ") ? raw.slice(eqIdx + 1).trim() : raw;
 
-    // Decode device_id from JWT payload (no signature verification needed)
-    const parts = token.split(".");
-    if (parts.length < 2) {
-      return { valid: false, error: "Invalid token format — paste the token cookie value from .innerai.com" };
+    // Parse token and optional email (format: "TOKEN EMAIL")
+    const eqIdx = raw.indexOf("=");
+    const stripped = eqIdx > 0 && !raw.startsWith("eyJ") ? raw.slice(eqIdx + 1).trim() : raw;
+    const lastSpace = stripped.lastIndexOf(" ");
+    let token = stripped;
+    let credEmail = "";
+    if (lastSpace > 0) {
+      const possibleEmail = stripped.slice(lastSpace + 1).trim();
+      if (possibleEmail.includes("@")) {
+        token = stripped.slice(0, lastSpace).trim();
+        credEmail = possibleEmail;
+      }
     }
+
+    if (!credEmail) {
+      return {
+        valid: false,
+        error:
+          "Email is required — paste token followed by a space and your email: eyJ... user@example.com",
+      };
+    }
+
+    // Validate JWT structure (3 parts separated by dots)
+    const parts = token.split(".");
+    if (parts.length < 3) {
+      return {
+        valid: false,
+        error:
+          "Invalid token format — paste only the token cookie value from .innerai.com (starts with eyJ…)",
+      };
+    }
+
+    // Decode payload and check expiry
     const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
     let payload: Record<string, unknown> = {};
     try {
@@ -3334,44 +3359,29 @@ async function validateInnerAiProvider({ apiKey, providerSpecificData = {} }: an
     } catch {
       return { valid: false, error: "Could not parse Inner.ai token — re-paste from DevTools" };
     }
-    const deviceId = String(payload.device_id ?? "").trim();
-    if (!deviceId) {
-      return { valid: false, error: "Token does not contain device_id — re-paste from DevTools" };
-    }
 
-    const response = await validationRead(
-      "https://platformapi.innerai.com/api/v1/users/profile",
-      {
-        headers: applyCustomUserAgent(
-          {
-            "USER-TOKEN": token,
-            "DEVICE-ID": deviceId,
-            "User-Agent":
-              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            Origin: "https://app.innerai.com",
-          },
-          providerSpecificData
-        ),
-      }
-    );
-
-    if (response.status === 401 || response.status === 403) {
+    if (typeof payload.exp === "number" && payload.exp * 1000 < Date.now()) {
       return {
         valid: false,
-        error: "Invalid or expired Inner.ai token — re-paste from DevTools → Cookies → .innerai.com",
+        error:
+          "Inner.ai token has expired — re-login at app.innerai.com and re-paste the token cookie",
       };
     }
 
-    if (!response.ok) {
-      return { valid: false, error: `Inner.ai returned HTTP ${response.status}` };
-    }
-
-    const body = await response.json().catch(() => null);
-    const email = String(body?.data?.email ?? body?.email ?? "").trim();
-    if (!email) {
+    // Verify the token carries at least one known Inner.ai identity field
+    const hasIdentity =
+      payload.device_id ??
+      payload.deviceId ??
+      payload["device-id"] ??
+      payload.did ??
+      payload.user_id ??
+      payload.userId ??
+      payload.sub;
+    if (!hasIdentity) {
       return {
         valid: false,
-        error: "Could not retrieve email from Inner.ai profile — check your token",
+        error:
+          "Token does not look like an Inner.ai session token — re-paste from DevTools → Cookies → .innerai.com",
       };
     }
 

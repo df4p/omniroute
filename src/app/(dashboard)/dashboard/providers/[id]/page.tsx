@@ -4695,12 +4695,16 @@ export default function ProviderDetailPage() {
       </Modal>
 
       {/* Inner.ai Tutorial Modal */}
-      {providerId === "inner-ai" && showTutorialModal && (
-        <Modal onClose={() => setShowTutorialModal(false)} title="Como conectar o Inner.ai">
+      {providerId === "inner-ai" && (
+        <Modal
+          isOpen={showTutorialModal}
+          onClose={() => setShowTutorialModal(false)}
+          title="Como conectar o Inner.ai"
+        >
           <div className="flex flex-col gap-4 text-sm">
             <p className="text-text-muted">
-              O Inner.ai usa um token de sessão de longa duração armazenado como cookie. Siga os
-              passos abaixo para encontrá-lo.
+              O Inner.ai requer o token de sessão <strong>e</strong> o seu e-mail de login. Cole os
+              dois no campo de autenticação separados por um espaço.
             </p>
             <ol className="flex flex-col gap-3 list-none">
               {[
@@ -4712,22 +4716,22 @@ export default function ProviderDetailPage() {
                 {
                   step: 2,
                   title: "Abra o DevTools",
-                  desc: 'Pressione F12 (Windows/Linux) ou Cmd+Option+I (Mac) para abrir as ferramentas de desenvolvedor.',
+                  desc: "Pressione F12 (Windows/Linux) ou Cmd+Option+I (Mac) para abrir as ferramentas de desenvolvedor.",
                 },
                 {
                   step: 3,
-                  title: 'Navegue até Application → Cookies → .innerai.com',
+                  title: "Navegue até Application → Cookies → .innerai.com",
                   desc: 'No painel do DevTools, clique na aba "Application". No painel esquerdo, expanda "Cookies" e clique em ".innerai.com".',
                 },
                 {
                   step: 4,
-                  title: 'Encontre o cookie chamado "token"',
-                  desc: 'Procure na lista o cookie de nome "token". O valor é um JWT longo que começa com "eyJ…".',
+                  title: 'Copie o valor do cookie "token"',
+                  desc: 'Procure na lista o cookie de nome "token". Clique duas vezes no campo "Value" e copie o valor completo (começa com "eyJ…").',
                 },
                 {
                   step: 5,
-                  title: "Copie e cole o valor aqui",
-                  desc: 'Clique duas vezes no campo "Value" do cookie "token", copie o valor completo e cole no campo de autenticação do OmniRoute.',
+                  title: "Cole token + email no campo de autenticação",
+                  desc: "No OmniRoute, cole o token, adicione um espaço e depois o seu e-mail de login do Inner.ai. Exemplo: eyJhbGc... seuemail@exemplo.com",
                 },
               ].map(({ step, title, desc }) => (
                 <li key={step} className="flex gap-3">
@@ -4746,10 +4750,17 @@ export default function ProviderDetailPage() {
             </ol>
             <div
               className="rounded-lg px-4 py-3 text-xs"
-              style={{ background: "rgba(26,86,219,0.08)", border: "1px solid rgba(26,86,219,0.2)" }}
+              style={{
+                background: "rgba(26,86,219,0.08)",
+                border: "1px solid rgba(26,86,219,0.2)",
+              }}
             >
-              <strong style={{ color: "#1A56DB" }}>Dica:</strong> O token do Inner.ai tem validade
-              de aproximadamente 360 dias. Se a conexão expirar, repita o processo acima.
+              <strong style={{ color: "#1A56DB" }}>Formato:</strong>{" "}
+              <code className="font-mono">eyJhbGc... seuemail@exemplo.com</code>
+              <br />
+              <span className="opacity-75">
+                O token tem validade de ~360 dias. Se expirar, repita o processo acima.
+              </span>
             </div>
           </div>
         </Modal>

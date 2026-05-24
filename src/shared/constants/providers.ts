@@ -384,7 +384,7 @@ export const WEB_COOKIE_PROVIDERS = {
     textIcon: "IA",
     website: "https://app.innerai.com",
     authHint:
-      "Paste your token cookie value from .innerai.com — open DevTools → Application → Cookies → .innerai.com and copy the token value.",
+      "Paste your token cookie and email separated by a space: open DevTools → Application → Cookies → .innerai.com, copy the token value, then append a space and your Inner.ai login email. Example: eyJhbG... user@example.com",
   },
   "adapta-web": {
     id: "adapta-web",
