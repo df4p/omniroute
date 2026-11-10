@@ -304,3 +304,8 @@ docker-compose.yml.bak
 
 # Scoped tsc incremental state written by the typecheck gates (typecheck:core / open-sse / api)
 .tsbuildinfo-*
+
+# Carimbo de versao gerado por scripts/build.sh (camada df4p) — SEMPRE gerado,
+# NUNCA versionado. O `VERSION` (nossa camada) e o `UPSTREAM_VERSION` (app de
+# terceiros) sao rastreados; o carimbo e o que o build produz a partir deles.
+/.build-info.json
