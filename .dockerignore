@@ -1,6 +1,10 @@
 # VCS
-.git
-**/.git
+# Padrao df4p: `.git` NAO entra aqui. O rotulo de versao (`vX.Y.Z+<commit>`) e
+# carimbado a partir do git; sem `.git` no contexto de build o commit do carimbo
+# vira `unknown` e o que rodou fica sem identidade. `scripts/check-versioning.sh`
+# reprova a volta desta exclusao. O custo (o historico no contexto) e conhecido e
+# aceito; a poda de contexto que o upstream faz para o tamanho da imagem continua
+# valendo para tudo o que NAO e lido pelo carimbo.
 
 # Editor
 .vscode

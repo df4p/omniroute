@@ -1,0 +1,14 @@
+# Versao do upstream (codigo de TERCEIROS) que esta camada df4p carrega.
+#
+# NAO confunda com o VERSION deste repo:
+#   VERSION          = a NOSSA camada (o fork df4p). E ela que ganha tag/release.
+#   UPSTREAM_VERSION = o app de terceiros que embalamos: semver + commit da base.
+#
+# `scripts/check-versioning.sh` reprova se `upstream_version` divergir do
+# `version` do package.json — e a trava que impede a nossa camada de carimbar um
+# upstream diferente do que ela de fato embala. Quando o upstream sobe de versao,
+# atualize os DOIS (o package.json vem no proprio commit do upstream).
+#
+# Formato: chave=valor, uma por linha.
+upstream_version=3.8.52
+upstream_commit=c754707

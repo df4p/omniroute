@@ -337,6 +337,10 @@ const ENV_VAR_DENYLIST = new Set([
   "LOCAL_ONLY", // routeGuard classification label (AGENTBRIDGE.md)
   "SPAWN_CAPABLE", // routeGuard classification label (AGENTBRIDGE.md)
   "ZEROGRAVITY_SENSITIVE_WORDS", // cross-project constant named in a comparison (STEALTH_GUIDE.md)
+  // ── Versioning file names of the df4p layer (this repo is a fork) ───────────
+  // `UPSTREAM_VERSION` is a repo FILE (the upstream app version+commit the fork
+  // packages), documented in docs/runbooks/versionamento.md — not an env var.
+  "UPSTREAM_VERSION",
 ]);
 
 /** Endpoints that don't follow the standard route.ts pattern. */
